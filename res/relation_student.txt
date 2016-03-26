@@ -1,0 +1,11 @@
+Student
+id
+first_name
+last_name
+mobile_phone
+city
+address
+;
+1;Bill;Gates;6970000000;New York;York 123
+2;Steve;Jobs;1234567890;California;Golden Beach 34
+3;Mark;Zuckerberg;0987654321;California;Silver Beach 590
