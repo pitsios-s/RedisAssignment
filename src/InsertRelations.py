@@ -1,7 +1,7 @@
 import redis
 
 # Connect to local redis, on port 6379 using database 0.
-_redis = redis.StrictRedis(host='127.0.0.1', port=6379, db=0)
+_redis = redis.StrictRedis(host='192.168.229.129', port=6379, db=0)
 
 # Create a pipeline, that will be used for bulk inserts into redis.
 redis_pipeline = _redis.pipeline()
@@ -89,8 +89,8 @@ if __name__ == '__main__':
                 redis_pipeline.execute()
         except FileNotFoundError:
             print('Exception occurred, File not found.')
-        except:
-            print('Exception occurred.')
+        except Exception as e:
+            print('Exception occurred.' + str(e))
         finally:
             choice = input('Would you like to import another file? (yes/no): ').strip().lower()
 
