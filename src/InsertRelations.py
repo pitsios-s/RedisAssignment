@@ -23,10 +23,12 @@ def add_key_value(key, value):
     redis_hash_values[key] = value.strip()
 
 
-# The 'main' function of the program.
+# The main function of the program.
 if __name__ == '__main__':
 
+    # Repeat until user does not want to continue with another relation.
     while True:
+
         # Request the file name from stdin.
         file_name = input('Please enter the path of the relational info file (Absolute or Relative): ')
 

@@ -1,49 +1,118 @@
 import redis
+import pandas
 
 # Connect to local redis, on port 6379 using database 0.
 _redis = redis.StrictRedis(host='192.168.229.129', port=6379, db=0)
 
-# The 'main' function of the program.
+# This dictionary will be used in order to store data frames that correspond to the tables in the FROM clause from the
+# specification file. The key will be the table's name and the value will be the data frame itself.
+data_frames = {}
+
+# Attributes dictionary will store as key the name of the relation and as value, as set containing all
+# the attributes of this relation that we want to project.
+attributes = {}
+
+
+def find_select_attributes(file_lines):
+    """ This function is responsible for reading the first line of the query specification file, in order to extract all
+    the projection attributes, alongside with the tables that they belong and store them in a dictionary. """
+    global attributes
+
+    # Get the first line and split it on ',' character, in order to get all the projections columns.
+    select_attributes = file_lines[0].split(',')
+
+    # Loop for every item in the projection columns.
+    for item in select_attributes:
+
+        # Those attributes will be in the form 'Relation.column'. So if we split them in the '.' character,
+        # We get two strings with the first being the relation's name and the second a column that we want
+        # to project.
+        values = item.split('.')
+        _key = values[0].strip().lower()
+        _value = values[1].strip().lower()
+
+        # If the "attributes" dictionary already contains a key with the relation's name, then add to it's
+        # list the new attribute, otherwise, add a new entry which has as value a set containing a single
+        # element.
+        if _key in attributes:
+            attributes[_key].add(_value)
+        else:
+            attributes[_key] = {_value}
+
+
+def create_data_frames(all_lines):
+    """ This function is responsible for reading the second line of the query specification file, which contains the
+     names of the relations that we want to get the attributes from. After that, it reads all the corresponding hashes
+     from redis, gets only the appropriate 'columns' that we have stored earlier and creates a data frame using the
+     pandas library that contains those records. """
+    global data_frames
+
+    # Split the second line on the ',' character, in order to get the names of all the relations.
+    table_names = all_lines[1].split(',')
+
+    # Loop for every relation name
+    for table in table_names:
+
+        # Remove any whitespaces.
+        current_table = table.strip().lower()
+
+        # Use the Redis' 'KEYS' command to get all the key names of the hashes, that begin with the current table's name
+        key_names = _redis.keys(current_table + ':*')
+
+        # Get all the projection attributes that correspond to the current table, using the "attributes" dictionary.
+        attrs = attributes[current_table]
+
+        # A dictionary that will keep a list of values for every key in all hashes that share the same name.
+        # e.g. for all hashes that are named student:*, let's say that we want the the values of the attribute name
+        # from all those hashes. Then the key_values dictionary will keep records that have as a key the name of the
+        # attribute (name) and as value a list that contains the associated values from all 'student' hashes.
+        key_values = {}
+
+        # Loop for every hash key that the Redis' 'KEYS' function returned....
+        for hash_key in key_names:
+
+            # Use Redis' 'HGETALL' command, in order to get a dictionary of key-value pairs, that correspond to the
+            # current hash key.
+            hash_values = _redis.hgetall(hash_key)
+
+            # Loop for every attribute that we want to project.
+            for attr in attrs:
+                v = (hash_values[attr.encode('utf-8')]).decode('utf-8')
+
+                if attr in key_values:
+                    key_values[attr].append(v)
+                else:
+                    key_values[attr] = [v]
+
+        # Now, in the data_frames dictionary, add a new data frame for the current relation.
+        data_frames[table.strip().lower()] = pandas.DataFrame(data=key_values)
+
+
+# The main function of the program.
 if __name__ == '__main__':
 
+    # Repeat until user does not want to continue with another query.
     while True:
+
         # Request the file name from stdin.
         file_name = input('Please enter the path of the query file (Absolute or Relative): ')
 
         try:
             # Open the file given above, in read mode.
             with open(file_name, 'r') as in_file:
+
+                # Read all the 3 lines from the specification file at once.
                 lines = in_file.readlines()
 
-                attributes = {}
+                # Fill the "attributes" dictionary.
+                find_select_attributes(lines)
 
-                select_attributes = lines[0].split(',')
+                # Create all the necessary data frames.
+                create_data_frames(lines)
 
-                for item in select_attributes:
-                    values = item.split('.')
-                    key = values[0].strip().lower()
-                    value = values[1].strip().lower()
+                for (key, value) in data_frames.items():
+                    print(value)
 
-                    if key in attributes:
-                        attributes[key].append(value)
-                    else:
-                        attributes[key] = [value]
-
-                table_names = lines[1].split(',')
-                for table in table_names:
-                    current_table = table.strip().lower()
-                    key_names = _redis.keys(current_table + ':*')
-
-                    attrs = attributes[current_table]
-                    print(*attrs, sep=' ')
-
-                    for hash_key in key_names:
-                        hash_values = _redis.hgetall(hash_key)
-
-                        vals = []
-                        for attr in attrs:
-                            vals.append("'" + (hash_values[attr.encode('utf-8')]).decode('utf-8') + "'")
-                        print(*vals, sep=' ')
         except FileNotFoundError:
             print('Exception occurred, File not found.')
         except Exception as e:
