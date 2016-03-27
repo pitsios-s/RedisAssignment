@@ -116,7 +116,7 @@ if __name__ == '__main__':
         except FileNotFoundError:
             print('Exception occurred, File not found.')
         except Exception as e:
-            print(str(e))
+            print('Exception occurred: ' + str(e))
         finally:
             choice = input('Would you like to import another file? (yes/no): ').strip().lower()
 

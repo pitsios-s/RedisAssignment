@@ -12,7 +12,13 @@ redis_hash_values = {}
 
 # This variable indicates the number of commands that are needed to be added in the pipeline, before attempting to
 # execute those commands in redis.
-BULK_INSERT_SIZE = 2
+BULK_INSERT_SIZE = 100
+
+# The total number of hashes that we attempted to insert into Redis.
+total_hashes = 0
+
+# The total number of hashes that were successfully inserted into Redis.
+succeeded_hashes = 0
 
 
 def add_key_value(key, value):
@@ -30,7 +36,7 @@ if __name__ == '__main__':
     while True:
 
         # Request the file name from stdin.
-        file_name = input('Please enter the path of the relational info file (Absolute or Relative): ')
+        file_name = input('\nPlease enter the path of the relational info file (Absolute or Relative): ')
 
         try:
             # Open the file given above, in read mode.
@@ -70,7 +76,7 @@ if __name__ == '__main__':
                         values = line.strip().split(';')
 
                         if not len(table_attributes) == len(values):
-                            print('Number of values does not match the number of attributes!')
+                            print('\nNumber of values does not match the number of attributes!')
                         else:
                             # Create a redis hash using the relational table's name, followed by ':' and the record's id
                             redis_hash_name = table_name + ':' + values[0].strip().lower().replace(' ', '_')
@@ -83,23 +89,31 @@ if __name__ == '__main__':
                             # Add the current command to the pipeline.
                             redis_pipeline.hmset(redis_hash_name, redis_hash_values)
 
-                            # If we have a suitable numbers of commands in the pipeline, execute them.
+                            # If we have a suitable number of commands in the pipeline, execute them.
                             if len(redis_pipeline) >= BULK_INSERT_SIZE:
-                                redis_pipeline.execute()
+                                results = redis_pipeline.execute()
+
+                                total_hashes += BULK_INSERT_SIZE
+                                succeeded_hashes = len([x for x in results if x])
 
                 # Execute all the pipelined commands again, in case we have any leftovers.
-                redis_pipeline.execute()
+                total_hashes += len(redis_pipeline)
+                results = redis_pipeline.execute()
+                succeeded_hashes = len([x for x in results if x])
+
         except FileNotFoundError:
-            print('Exception occurred, File not found.')
+            print('\nException occurred, File not found.')
         except Exception as e:
-            print('Exception occurred.' + str(e))
+            print('\nException occurred.' + str(e))
         finally:
-            choice = input('Would you like to import another file? (yes/no): ').strip().lower()
+            print('\nSuccessfully inserted {0} / {1} total hashes into Redis'.format(succeeded_hashes, total_hashes))
+
+            choice = input('\nWould you like to import another file? (yes/no): ').strip().lower()
 
             while (not choice == 'yes') and (not choice == 'no'):
-                choice = input('Invalid input.\nWould you like to import another file? (yes/no): ').strip().lower()
+                choice = input('\nInvalid input.\nWould you like to import another file? (yes/no): ').strip().lower()
 
             if choice == 'no':
                 break
 
-    print('Goodbye!')
+    print('\nGoodbye!')
