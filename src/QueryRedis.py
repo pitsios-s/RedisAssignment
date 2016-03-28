@@ -90,7 +90,10 @@ def create_data_frames(all_lines):
         key_names = _redis.keys(current_table + ':*')
 
         # Get all the projection attributes that correspond to the current table, using the "attributes" dictionary.
-        attrs = attributes[current_table]
+        if current_table in attributes:
+            attrs = attributes[current_table]
+        else:
+            attrs = []
 
         # A dictionary that will keep a list of values for every key in all hashes that share the same name.
         # e.g. for all hashes that are named student:*, let's say that we want the values of the attribute grade
@@ -105,19 +108,33 @@ def create_data_frames(all_lines):
             # current hash key.
             hash_values = _redis.hgetall(hash_key)
 
-            # Loop for every attribute that we want to project.
-            for attr in attrs:
-                v = (hash_values[attr.encode('utf-8')]).decode('utf-8')
+            # If we have already declared which attributes of the current table we will need, loop for every one of them
+            if len(attrs) > 0:
 
-                # If v is an integer of a floating point number, convert it.
-                v = convert_string(v)
+                # Loop for every attribute that we want to project.
+                for attr in attrs:
+                    v = (hash_values[attr.encode('utf-8')]).decode('utf-8')
 
-                # Finally add v in the key_values dict as a value, under the key that corresponds to the current
-                # attribute.
-                if attr in key_values:
-                    key_values[attr].append(v)
-                else:
-                    key_values[attr] = [v]
+                    # If v is an integer of a floating point number, convert it.
+                    v = convert_string(v)
+
+                    # Finally add v in the key_values dict as a value, under the key that corresponds to the current
+                    # attribute.
+                    if attr in key_values:
+                        key_values[attr].append(v)
+                    else:
+                        key_values[attr] = [v]
+
+            # Otherwise, keep all the columns for the current table.
+            else:
+                for (k, v) in hash_values.items():
+                    k = k.decode('utf-8')
+                    v = v.decode('utf-8')
+
+                    if k in key_values:
+                        key_values[k].append(v)
+                    else:
+                        key_values[k] = [v]
 
         # Now, in the data_frames dictionary, add a new data frame for the current relation.
         data_frames[table.strip().lower()] = pandas.DataFrame(data=key_values)
@@ -128,7 +145,9 @@ def filter_simple_condition(literal):
      one literal. """
     global data_frames
 
-    left_right = re.split('<>|>|<|=', literal.strip().lower())
+    left_right = re.split('<>|>|<|=', literal.strip())
+    left_right[1] = left_right[1].replace("'", "")
+
     table_attribute = left_right[0].split('.')
     df_new = data_frames[table_attribute[0].strip().lower()]
 
@@ -142,25 +161,49 @@ def filter_simple_condition(literal):
         return df_new[df_new[table_attribute[1].strip().lower()] == convert_string(left_right[1].strip())]
 
 
+def handle_and_clauses(all_lines):
+    """ This function will be used to evaluate expressions that contain one or more and clauses and returns a data
+    frame that those constraints are fulfilled. """
+
+    # Split the line on the AND expression.
+    and_clauses = re.split(' +and +', all_lines[2].strip())
+
+    # If we have at least one AND clause in our expression...
+    if len(and_clauses) > 1:
+
+        # A vector that contains one data frame for each literal in the and clause.
+        d_frames = []
+
+        # Loop for every literal.
+        for literal in and_clauses:
+            # Evaluate the literal, filter the appropriate data frame and store the result in d_frames list.
+            d_frames.append(filter_simple_condition(literal))
+
+        # Now, in order to get one final data frame, we will proceed by joining all the data frames that we got from
+        # before.
+        data_frame_final = d_frames[0]
+        for i in range(1, len(d_frames)):
+            data_frame_final = data_frame_final.merge(d_frames[i], how="inner")
+
+        return data_frame_final
+
+    # If there is not any and clause, return a data frame that evaluates the single literal.
+    else:
+        return filter_simple_condition(lines[2])
+
+
 def filter_results(all_lines):
     """ This function will be used in order to process the third and final line of the query specification file which
     contains the where clause. """
 
     # Split the line on the OR expression.
-    or_clauses = re.split('[ ]+[or][ ]+', all_lines[2].strip().lower())
+    or_clauses = re.split(' +or +', all_lines[2].strip())
 
     # If we have at least one OR clause in our expression...
     if len(or_clauses) > 1:
         pass
     else:
-        # Split the line on the AND expression.
-        and_clauses = re.split('[ ]+[and][ ]+', all_lines[2].strip().lower())
-
-        # If we have at least one AND clause in our expression...
-        if len(and_clauses) > 1:
-            pass
-        else:
-            return filter_simple_condition(lines[2])
+        return handle_and_clauses(all_lines)
 
 
 # The main function of the program.
@@ -187,6 +230,8 @@ if __name__ == '__main__':
 
                 # Filter the results according to the WHERE clause.
                 print(filter_results(lines))
+                for (key, value) in data_frames.items():
+                    print(value)
 
         except FileNotFoundError:
             print('Exception occurred, File not found.')
