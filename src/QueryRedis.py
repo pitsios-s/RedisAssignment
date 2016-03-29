@@ -161,17 +161,17 @@ def filter_simple_condition(literal):
         return df_new[df_new[table_attribute[1].strip().lower()] == convert_string(left_right[1].strip())]
 
 
-def handle_and_clauses(all_lines):
+def handle_and_clauses(and_clause):
     """ This function will be used to evaluate expressions that contain one or more and clauses and returns a data
     frame that those constraints are fulfilled. """
 
     # Split the line on the AND expression.
-    and_clauses = re.split(' +and +', all_lines[2].strip())
+    and_clauses = re.split(' +[a|A][n|N][d|D] +', and_clause)
 
     # If we have at least one AND clause in our expression...
     if len(and_clauses) > 1:
 
-        # A vector that contains one data frame for each literal in the and clause.
+        # A vector that contains one data frame for each literal in the AND clause.
         d_frames = []
 
         # Loop for every literal.
@@ -183,13 +183,13 @@ def handle_and_clauses(all_lines):
         # before.
         data_frame_final = d_frames[0]
         for i in range(1, len(d_frames)):
-            data_frame_final = data_frame_final.merge(d_frames[i], how="inner")
+            data_frame_final = data_frame_final.merge(d_frames[i], how='inner', left_index=True, right_index=True)
 
         return data_frame_final
 
     # If there is not any and clause, return a data frame that evaluates the single literal.
     else:
-        return filter_simple_condition(lines[2])
+        return filter_simple_condition(and_clause)
 
 
 def filter_results(all_lines):
@@ -197,13 +197,26 @@ def filter_results(all_lines):
     contains the where clause. """
 
     # Split the line on the OR expression.
-    or_clauses = re.split(' +or +', all_lines[2].strip())
+    or_clauses = re.split(' +[o|O][r|R] +', all_lines[2].strip())
 
     # If we have at least one OR clause in our expression...
     if len(or_clauses) > 1:
-        pass
+
+        # A vector that contains one data frame for each literal in the OR clause.
+        d_frames = []
+
+        for literal in or_clauses:
+            d_frames.append(handle_and_clauses(literal))
+
+        indexes = set()
+        for i in range(0, len(d_frames)):
+            indexes = indexes.union(list(d_frames[i].index))
+
+        d_f = data_frames[all_lines[1].strip().lower()]
+        return d_f[d_f.index.isin(indexes)]
+
     else:
-        return handle_and_clauses(all_lines)
+        return handle_and_clauses(all_lines[2].strip())
 
 
 # The main function of the program.
@@ -231,6 +244,7 @@ if __name__ == '__main__':
                 # Filter the results according to the WHERE clause.
                 print(filter_results(lines))
                 for (key, value) in data_frames.items():
+                    print('\n')
                     print(value)
 
         except FileNotFoundError:
