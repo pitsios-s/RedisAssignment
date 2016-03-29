@@ -15,12 +15,12 @@ attributes = {}
 
 
 def is_int(item):
-        """ Checks if a given string represents an integer or not. """
-        try:
-            int(item)
-            return True
-        except ValueError:
-            return False
+    """ Checks if a given string represents an integer or not. """
+    try:
+        int(item)
+        return True
+    except ValueError:
+        return False
 
 
 def is_float(item):
@@ -205,14 +205,19 @@ def filter_results(all_lines):
         # A vector that contains one data frame for each literal in the OR clause.
         d_frames = []
 
+        # Loop for every literal in the OR clauses.
         for literal in or_clauses:
+            # Add a data frame in d_frames list, that fulfils the specified literal in the OR clause.
             d_frames.append(handle_and_clauses(literal))
 
+        # indexes is a set that will be keeping the union of  the row numbers of the individual data frames in d_frames.
         indexes = set()
         for i in range(0, len(d_frames)):
             indexes = indexes.union(list(d_frames[i].index))
 
+        # Create and return a data frame, using only the indexes computed above. This is the final result.
         d_f = data_frames[all_lines[1].strip().lower()]
+
         return d_f[d_f.index.isin(indexes)]
 
     else:
