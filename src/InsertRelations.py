@@ -1,7 +1,7 @@
 import redis
 
 # Connect to local redis, on port 6379 using database 0.
-_redis = redis.StrictRedis(host='192.168.229.129', port=6379, db=0)
+_redis = redis.StrictRedis(host='127.0.0.1', port=6379, db=0)
 
 # Create a pipeline, that will be used for bulk inserts into redis.
 redis_pipeline = _redis.pipeline()
@@ -13,6 +13,7 @@ redis_hash_values = {}
 # This variable indicates the number of commands that are needed to be added in the pipeline, before attempting to
 # execute those commands in redis.
 BULK_INSERT_SIZE = 100
+
 
 def add_key_value(key, value):
     """ This function is used to simply add a key-value pair to the data dictionary, in order to insert the values
