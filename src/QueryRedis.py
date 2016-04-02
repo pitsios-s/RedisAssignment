@@ -5,13 +5,11 @@ import re
 # Connect to local redis, on port 6379 using database 0.
 _redis = redis.StrictRedis(host='192.168.229.129', port=6379, db=0)
 
-# This dictionary will be used in order to store data frames that correspond to the tables in the FROM clause from the
-# specification file. The key will be the table's name and the value will be the data frame itself.
-data_frames = {}
+# A data frame that contains the cross product from all the tables in the WHERE clause.
+data_frame = None
 
-# Attributes dictionary will store as key the name of the relation and as value, as set containing all
-# the attributes of this relation that we want to project.
-attributes = {}
+# A list that contains all the attributes which are going to be projected.
+attributes = []
 
 
 def is_int(item):
@@ -45,7 +43,7 @@ def convert_string(string):
 
 def find_select_attributes(file_lines):
     """ This function is responsible for reading the first line of the query specification file, in order to extract all
-    the projection attributes, alongside with the tables that they belong to and store them in a dictionary. """
+    the projection attributes and store them in a list. """
     global attributes
 
     # Get the first line and split it on ',' character, in order to get all the projections columns.
@@ -53,21 +51,7 @@ def find_select_attributes(file_lines):
 
     # Loop for every item in the projection columns.
     for item in select_attributes:
-
-        # Those attributes will be in the form 'Relation.column'. So if we split them in the '.' character,
-        # we get two strings with the first being the relation's name and the second, a column that we want
-        # to project.
-        values = item.split('.')
-        _key = values[0].strip().lower()
-        _value = values[1].strip().lower()
-
-        # If the "attributes" dictionary already contains a key with the relation's name, then add to it's
-        # list the new attribute, otherwise, add a new entry which has as value a set containing a single
-        # element.
-        if _key in attributes:
-            attributes[_key].add(_value)
-        else:
-            attributes[_key] = {_value}
+        attributes.append(item.lower().strip())
 
 
 def create_data_frames(all_lines):
@@ -75,10 +59,12 @@ def create_data_frames(all_lines):
      names of the relations that we want to get the attributes from. After that, it reads all the corresponding hashes
      from redis, getting only the appropriate 'columns' that we stored earlier and creates a data frame using the
      pandas library which contains those records. """
-    global data_frames
+    global data_frame
 
     # Split the second line on the ',' character, in order to get the names of all the relations.
     table_names = all_lines[1].split(',')
+
+    data_frames = []
 
     # Loop for every relation name
     for table in table_names:
@@ -88,12 +74,6 @@ def create_data_frames(all_lines):
 
         # Use the Redis' 'KEYS' command to get all the key names of the hashes, that begin with the current table's name
         key_names = _redis.keys(current_table + ':*')
-
-        # Get all the projection attributes that correspond to the current table, using the "attributes" dictionary.
-        if current_table in attributes:
-            attrs = attributes[current_table]
-        else:
-            attrs = []
 
         # A dictionary that will keep a list of values for every key in all hashes that share the same name.
         # e.g. for all hashes that are named student:*, let's say that we want the values of the attribute grade
@@ -108,61 +88,65 @@ def create_data_frames(all_lines):
             # current hash key.
             hash_values = _redis.hgetall(hash_key)
 
-            # If we have already declared which attributes of the current table we will need, loop for every one of them
-            if len(attrs) > 0:
+            for (k, v) in hash_values.items():
+                k = current_table + '.' + k.decode('utf-8')
+                v = v.decode('utf-8')
 
-                # Loop for every attribute that we want to project.
-                for attr in attrs:
-                    v = (hash_values[attr.encode('utf-8')]).decode('utf-8')
-
-                    # If v is an integer of a floating point number, convert it.
-                    v = convert_string(v)
-
-                    # Finally add v in the key_values dict as a value, under the key that corresponds to the current
-                    # attribute.
-                    if attr in key_values:
-                        key_values[attr].append(v)
-                    else:
-                        key_values[attr] = [v]
-
-            # Otherwise, keep all the columns for the current table.
-            else:
-                for (k, v) in hash_values.items():
-                    k = k.decode('utf-8')
-                    v = v.decode('utf-8')
-
-                    if k in key_values:
-                        key_values[k].append(v)
-                    else:
-                        key_values[k] = [v]
+                if k in key_values:
+                    key_values[k].append(v)
+                else:
+                    key_values[k] = [v]
 
         # Now, in the data_frames dictionary, add a new data frame for the current relation.
-        data_frames[table.strip().lower()] = pandas.DataFrame(data=key_values)
+        data_frames.append(pandas.DataFrame(data=key_values))
+
+    # Combine all data frames into one, containing all the cross products.
+    data_frame = data_frames[0]
+    data_frame['join_key'] = 0
+
+    for i in range(1, len(data_frames)):
+        data_frame_next = data_frames[i]
+        data_frame_next['join_key'] = 0
+
+        data_frame = data_frame.merge(data_frame_next, how='inner', on='join_key')
+
+    del data_frame['join_key']
 
 
-def filter_simple_condition(literal):
+def evaluate_simple_condition(literal):
     """ This function will be used in order to filter our data frames, when we have simple where conditions, with only
      one literal. """
-    global data_frames
+    global data_frame
 
     left_right = re.split('<>|>|<|=', literal.strip())
     left_right[1] = left_right[1].replace("'", "")
 
-    table_attribute = left_right[0].split('.')
-    df_new = data_frames[table_attribute[0].strip().lower()]
+    attr = left_right[0].lower().strip()
 
     if '<>' in literal:
-        return df_new[df_new[table_attribute[1].strip().lower()] != convert_string(left_right[1].strip())]
+        if len(left_right[1].split('.')) == 2:
+            return data_frame[data_frame[attr] != data_frame[left_right[1].strip()]]
+        else:
+            return data_frame[data_frame[attr] != convert_string(left_right[1].strip())]
     elif '>' in literal:
-        return df_new[df_new[table_attribute[1].strip().lower()] > convert_string(left_right[1].strip())]
+        if len(left_right[1].split('.')) == 2:
+            return data_frame[data_frame[attr] > data_frame[left_right[1].strip()]]
+        else:
+            return data_frame[data_frame[attr] > convert_string(left_right[1].strip())]
     elif '<' in literal:
-        return df_new[df_new[table_attribute[1].strip().lower()] < convert_string(left_right[1].strip())]
+        if len(left_right[1].split('.')) == 2:
+            return data_frame[data_frame[attr] < data_frame[left_right[1].strip()]]
+        else:
+            return data_frame[data_frame[attr] < convert_string(left_right[1].strip())]
     elif '=' in literal:
-        return df_new[df_new[table_attribute[1].strip().lower()] == convert_string(left_right[1].strip())]
+        if len(left_right[1].split('.')) == 2:
+            return data_frame[data_frame[attr] == data_frame[left_right[1].strip()]]
+        else:
+            return data_frame[data_frame[attr] == convert_string(left_right[1].strip())]
 
 
 def handle_and_clauses(and_clause):
-    """ This function will be used to evaluate expressions that contain one or more and clauses and returns a data
+    """ This function will be used to evaluate expressions that contain one or more AND clauses and returns a data
     frame that those constraints are fulfilled. """
 
     # Split the line on the AND expression.
@@ -177,10 +161,9 @@ def handle_and_clauses(and_clause):
         # Loop for every literal.
         for literal in and_clauses:
             # Evaluate the literal, filter the appropriate data frame and store the result in d_frames list.
-            d_frames.append(filter_simple_condition(literal))
+            d_frames.append(evaluate_simple_condition(literal))
 
-        # Now, in order to get one final data frame, we will proceed by joining all the data frames that we got from
-        # before.
+        # Now, in order to get one final data frame, we will proceed by joining all the data frames that we got before.
         data_frame_final = d_frames[0]
         for i in range(1, len(d_frames)):
             data_frame_final = data_frame_final.merge(d_frames[i], how='inner', left_index=True, right_index=True)
@@ -189,12 +172,13 @@ def handle_and_clauses(and_clause):
 
     # If there is not any and clause, return a data frame that evaluates the single literal.
     else:
-        return filter_simple_condition(and_clause)
+        return evaluate_simple_condition(and_clause)
 
 
 def filter_results(all_lines):
     """ This function will be used in order to process the third and final line of the query specification file which
-    contains the where clause. """
+    contains the WHERE clause. """
+    global data_frame
 
     # Split the line on the OR expression.
     or_clauses = re.split(' +[o|O][r|R] +', all_lines[2].strip())
@@ -216,9 +200,7 @@ def filter_results(all_lines):
             indexes = indexes.union(list(d_frames[i].index))
 
         # Create and return a data frame, using only the indexes computed above. This is the final result.
-        d_f = data_frames[all_lines[1].strip().lower()]
-
-        return d_f[d_f.index.isin(indexes)]
+        return data_frame[data_frame.index.isin(indexes)]
 
     else:
         return handle_and_clauses(all_lines[2].strip())
@@ -246,12 +228,7 @@ if __name__ == '__main__':
                 # Create all the necessary data frames.
                 create_data_frames(lines)
 
-                # Filter the results according to the WHERE clause.
-                print(filter_results(lines))
-                for (key, value) in data_frames.items():
-                    print('\n')
-                    print(value)
-
+                print(filter_results(lines)[attributes])
         except FileNotFoundError:
             print('Exception occurred, File not found.')
         except Exception as e:

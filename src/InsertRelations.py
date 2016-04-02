@@ -14,13 +14,6 @@ redis_hash_values = {}
 # execute those commands in redis.
 BULK_INSERT_SIZE = 100
 
-# The total number of hashes that we attempted to insert into Redis.
-total_hashes = 0
-
-# The total number of hashes that were successfully inserted into Redis.
-succeeded_hashes = 0
-
-
 def add_key_value(key, value):
     """ This function is used to simply add a key-value pair to the data dictionary, in order to insert the values
     later into redis. """
@@ -54,6 +47,12 @@ if __name__ == '__main__':
 
                 # This boolean attribute indicates whether we are before the ';' separator, or not.
                 separator_found = False
+
+                # The total number of hashes that we attempted to insert into Redis.
+                total_hashes = 0
+
+                # The total number of hashes that were successfully inserted into Redis.
+                succeeded_hashes = 0
 
                 # Loop for every line in the file...
                 for line in in_file:

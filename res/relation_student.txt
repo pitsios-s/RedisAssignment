@@ -9,3 +9,5 @@ address
 1;Bill;Gates;6970000000;New York;York 123
 2;Steve;Jobs;1234567890;California;Golden Beach 34
 3;Mark;Zuckerberg;0987654321;California;Silver Beach 590
+4;Eirini;Dernika;6976916001;Athens;Lagoon Beach 876
+5;Stamatis;Pitsios;6988708934;Athens; Chiou 6
