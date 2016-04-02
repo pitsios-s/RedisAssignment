@@ -16,8 +16,8 @@ BULK_INSERT_SIZE = 100
 
 
 def add_key_value(key, value):
-    """ This function is used to simply add a key-value pair to the data dictionary, in order to insert the values
-    later into redis. """
+    """ This function is simply used add a key-value pair to the data dictionary, in order to insert the values later
+    into redis. """
     global redis_hash_values
 
     redis_hash_values[key] = value.strip()
@@ -30,7 +30,7 @@ if __name__ == '__main__':
     while True:
 
         # Request the file name from stdin.
-        file_name = input('\nPlease enter the path of the relational info file (Absolute or Relative): ')
+        file_name = input('Please enter the path of the relational info file (Absolute or Relative): ')
 
         try:
             # Open the file given above, in read mode.
@@ -42,8 +42,7 @@ if __name__ == '__main__':
                 # The table's columns.
                 table_attributes = []
 
-                # This boolean attribute indicates whether we have read the first line,
-                # which is the table's name, or not.
+                # This boolean attribute indicates whether we have read the table's name, or not.
                 table_name_found = False
 
                 # This boolean attribute indicates whether we are before the ';' separator, or not.
@@ -97,17 +96,18 @@ if __name__ == '__main__':
                                 succeeded_hashes = len([x for x in results if x])
 
                 # Execute all the pipelined commands again, in case we have any leftovers.
-                total_hashes += len(redis_pipeline)
-                results = redis_pipeline.execute()
-                succeeded_hashes = len([x for x in results if x])
+                if len(redis_pipeline) > 0:
+                    total_hashes += len(redis_pipeline)
+                    results = redis_pipeline.execute()
+                    succeeded_hashes = len([x for x in results if x])
 
+                print('\nSuccessfully inserted {0} / {1} total hashes into Redis'
+                      .format(succeeded_hashes, total_hashes))
         except FileNotFoundError:
             print('\nException occurred, File not found.')
         except Exception as e:
             print('\nException occurred.' + str(e))
         finally:
-            print('\nSuccessfully inserted {0} / {1} total hashes into Redis'.format(succeeded_hashes, total_hashes))
-
             choice = input('\nWould you like to import another file? (yes/no): ').strip().lower()
 
             while (not choice == 'yes') and (not choice == 'no'):

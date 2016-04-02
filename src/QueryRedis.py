@@ -1,8 +1,9 @@
 import redis
 import pandas
+import re
 
 # Connect to local redis, on port 6379 using database 0.
-_redis = redis.StrictRedis(host='192.168.229.129', port=6379, db=0)
+_redis = redis.StrictRedis(host='127.0.0.1', port=6379, db=0)
 
 # A data frame that contains the cross product from all the tables in the WHERE clause.
 data_frame = pandas.DataFrame()
@@ -135,14 +136,13 @@ if __name__ == '__main__':
                 create_data_frames(lines)
 
                 # Get the condition from the third line and convert dots into underscores and '=' into '=='
-                condition = lines[2].lower().replace('.', '_').replace('=', '==')
+                condition = re.sub(r'([a-z]+)(\.)([a-z]+)', r'\1_\3', re.sub(r'[^><]=', '==', lines[2].lower()))
 
                 # Use the pandas "query" function, in order to get only those lines that the condition holds true.
                 data_frame.query(condition, inplace=True)
 
                 # Extract only the columns that we want to display and print the final result.
                 print("\n", data_frame[attributes])
-
         except FileNotFoundError:
             print('\nException occurred, File not found.')
         except Exception as e:
