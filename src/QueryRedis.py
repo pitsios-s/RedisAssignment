@@ -137,7 +137,7 @@ if __name__ == '__main__':
 
                 # Get the condition from the third line and convert dots into underscores and '=' into '=='
                 condition = re.sub(r'([a-z]+([0-9]*[a-z]*)*)(\.)([a-z]+([0-9]*[a-z]*)*)', r'\1_\4',
-                                   re.sub(r'[^><]=', '==', lines[2].lower()))
+                                   re.sub(r'(.[^<>!])(=)(.)', r'\1==\3', lines[2].lower().strip().replace('<>', '!=')))
 
                 # Use the pandas "query" function, in order to get only those lines that the condition holds true.
                 data_frame.query(condition, inplace=True)
