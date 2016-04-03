@@ -120,7 +120,7 @@ if __name__ == '__main__':
     while True:
 
         # Request the file name from stdin.
-        file_name = input('Please enter the path of the query file (Absolute or Relative): ')
+        file_name = input('\nPlease enter the path of the query file (Absolute or Relative): ')
 
         try:
             # Open the file given above, in read mode.
@@ -142,8 +142,12 @@ if __name__ == '__main__':
                 # Use the pandas "query" function, in order to get only those lines that the condition holds true.
                 data_frame.query(condition, inplace=True)
 
+                # Reset the data frame's index, in order to start from 0.
+                data_frame.reset_index(inplace=True)
+
                 # Extract only the columns that we want to display and print the final result.
                 print("\n", data_frame[attributes])
+
         except FileNotFoundError:
             print('\nException occurred, File not found.')
         except Exception as e:

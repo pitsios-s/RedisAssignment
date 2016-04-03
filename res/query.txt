@@ -1,3 +1,3 @@
 mtcars.id, mtcars.cyl, mtcars.disp, student.mobile_phone
 mtcars, student
-mtcars.student_id = student.id and mtcars.cyl >= 6
+mtcars.student_id = student.id and mtcars.id = 'Mazda RX4'

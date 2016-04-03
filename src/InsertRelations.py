@@ -20,7 +20,7 @@ def add_key_value(key, value):
     into redis. """
     global redis_hash_values
 
-    redis_hash_values[key] = value.strip()
+    redis_hash_values[key] = value.strip().lower()
 
 
 # The main function of the program.
@@ -30,7 +30,7 @@ if __name__ == '__main__':
     while True:
 
         # Request the file name from stdin.
-        file_name = input('Please enter the path of the relational info file (Absolute or Relative): ')
+        file_name = input('\nPlease enter the path of the relational info file (Absolute or Relative): ')
 
         try:
             # Open the file given above, in read mode.
@@ -101,8 +101,8 @@ if __name__ == '__main__':
                     results = redis_pipeline.execute()
                     succeeded_hashes = len([x for x in results if x])
 
-                print('\nSuccessfully inserted {0} / {1} total hashes into Redis'
-                      .format(succeeded_hashes, total_hashes))
+                print('\nSuccessfully inserted {0} / {1} hashes into Redis'.format(succeeded_hashes, total_hashes))
+
         except FileNotFoundError:
             print('\nException occurred, File not found.')
         except Exception as e:
