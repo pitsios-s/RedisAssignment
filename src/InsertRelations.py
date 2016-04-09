@@ -1,3 +1,10 @@
+############### AUTHORS ###############
+
+# Eirini Dernika    --> BAPT1509
+# Stamatis Pitsios  --> BAPT1502
+
+#######################################
+
 import redis
 
 # Connect to local redis, on port 6379 using database 0.
@@ -63,6 +70,8 @@ if __name__ == '__main__':
 
                     # Read until reaching the ';' character, which is an indicator of table's data.
                     if not separator_found:
+
+                        # This means that we just found the line which contains the table's name.
                         if not table_name_found:
                             table_name = line.strip().lower().replace(' ', '_')
                             table_name_found = True
@@ -74,6 +83,7 @@ if __name__ == '__main__':
                     else:
                         values = line.strip().split(';')
 
+                        # Check if number of values matches the number of attributes given, if not, print a message.
                         if not len(table_attributes) == len(values):
                             print('\nNumber of values does not match the number of attributes!')
                         else:

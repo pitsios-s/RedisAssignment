@@ -1,3 +1,3 @@
 mtcars.id, mtcars.cyl, mtcars.disp, student.mobile_phone
 mtcars, student
-mtcars.student_id = student.id and mtcars.id = 'Mazda RX4'
+mtcars.student_id = student.id and (mtcars.mpg > 20 or mtcars.drat < 3)

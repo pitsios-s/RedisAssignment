@@ -1,3 +1,10 @@
+############### AUTHORS ###############
+
+# Eirini Dernika    --> BAPT1509
+# Stamatis Pitsios  --> BAPT1502
+
+#######################################
+
 import redis
 import pandas
 import re
@@ -8,8 +15,8 @@ _redis = redis.StrictRedis(host='127.0.0.1', port=6379, db=0)
 # A data frame that contains the cross product from all the tables in the WHERE clause.
 data_frame = pandas.DataFrame()
 
-# A list that contains all the attributes which are going to be projected.
-attributes = []
+# A set that contains all the attributes which are going to be projected.
+attributes = set()
 
 
 def is_float(column):
@@ -42,7 +49,7 @@ def find_select_attributes(file_lines):
 
     # Loop for every item in the projection columns.
     for item in select_attributes:
-        attributes.append(item.lower().strip().replace('.', '_'))
+        attributes.add(item.lower().strip().replace('.', '_'))
 
 
 def create_data_frames(all_lines):
@@ -146,8 +153,11 @@ if __name__ == '__main__':
                 data_frame.reset_index(inplace=True)
 
                 # Extract only the columns that we want to display and print the final result.
-                print("\n", data_frame[attributes])
+                print("\n", data_frame[list(attributes)])
 
+                # Delete all previous contents of data_frame and attributes, in case we want to run another query.
+                data_frame = pandas.DataFrame()
+                attributes = set()
         except FileNotFoundError:
             print('\nException occurred, File not found.')
         except Exception as e:
